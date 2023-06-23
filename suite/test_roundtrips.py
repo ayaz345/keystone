@@ -165,8 +165,7 @@ def assemble(arch_mode, s):
 def disassemble(arch_mode, b):
     cs = Cs(arch_modes[arch_mode]["capstone_arch"],
             arch_modes[arch_mode]["capstone_mode"])
-    return "\n".join(["{} {}".format(i.mnemonic, i.op_str)
-                      for i in cs.disasm(b, 0x0)])
+    return "\n".join([f"{i.mnemonic} {i.op_str}" for i in cs.disasm(b, 0x0)])
 
 if __name__ == "__main__":
     colors = {
@@ -178,8 +177,9 @@ if __name__ == "__main__":
     counter = 0
     counter_failed = 0
     print("")
-    print("== {}keystone/capstone round-trip tests{} ==".format(
-        colors["bold"], colors["neutral"]))
+    print(
+        f'== {colors["bold"]}keystone/capstone round-trip tests{colors["neutral"]} =='
+    )
     print("")
     for arch_mode, assembly in roundtrip_tests:
         counter += 1
@@ -195,11 +195,11 @@ if __name__ == "__main__":
             status_marker = "✘"
             equality = "!="
             counter_failed += 1
-        print("  {}{}{}  [{}] asm('{}') {} asm(disasm(asm(…))) ⇔ {} {} {}".format(
-            status_color, status_marker, colors["neutral"], arch_mode,
-            assembly, equality, repr(assembled), equality, repr(reassembled)))
+        print(
+            f"""  {status_color}{status_marker}{colors["neutral"]}  [{arch_mode}] asm('{assembly}') {equality} asm(disasm(asm(…))) ⇔ {repr(assembled)} {equality} {repr(reassembled)}"""
+        )
     print("")
-    print("** Results: {}{}{} of {}{}{} tests failed **".format(
-        colors["bold"], counter_failed, colors["neutral"],
-        colors["bold"], counter, colors["neutral"]))
+    print(
+        f'** Results: {colors["bold"]}{counter_failed}{colors["neutral"]} of {colors["bold"]}{counter}{colors["neutral"]} tests failed **'
+    )
     print("")

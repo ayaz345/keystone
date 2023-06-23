@@ -17,20 +17,14 @@ class TestSymbols(regress.RegressTest):
         try:
             encoding, count = ks.asm(b"_label:; nop; _label:")
         except KsError as e:
-            if e.errno == KS_ERR_ASM_SYMBOL_REDEFINED:
-                #print("Got error KS_ERR_ASM_SYMBOL_REDEFINED as expected")
-                pass
-            else:
-                self.assertFalse(1, "ERROR: %s" % e)
+            if e.errno != KS_ERR_ASM_SYMBOL_REDEFINED:
+                self.assertFalse(1, f"ERROR: {e}")
 
         try:
             encoding, count = ks.asm(b"mov eax, eflags")
         except KsError as e:
-            if e.errno == KS_ERR_ASM_SYMBOL_MISSING:
-                #print("Got error KS_ERR_ASM_SYMBOL_MISSING as expected")
-                pass
-            else:
-                self.assertFalse(1, "ERROR: %s" % e)
+            if e.errno != KS_ERR_ASM_SYMBOL_MISSING:
+                self.assertFalse(1, f"ERROR: {e}")
 
 
 if __name__ == '__main__':

@@ -49,8 +49,6 @@ def copy_sources():
     This rearranges the source files under the python distribution
     directory.
     """
-    src = []
-
     os.system('make clean')
     shutil.rmtree(SRC_DIR, ignore_errors=True)
     os.mkdir(SRC_DIR)
@@ -59,7 +57,7 @@ def copy_sources():
     shutil.copytree(os.path.join(ROOT_DIR, '../../include'), os.path.join(SRC_DIR, 'include/'))
     shutil.copytree(os.path.join(ROOT_DIR, '../../suite'), os.path.join(SRC_DIR, 'suite/'))
 
-    src.extend(glob.glob(os.path.join(ROOT_DIR, "../../*.h")))
+    src = list(glob.glob(os.path.join(ROOT_DIR, "../../*.h")))
     src.extend(glob.glob(os.path.join(ROOT_DIR, "../../*.cpp")))
     src.extend(glob.glob(os.path.join(ROOT_DIR, "../../*.inc")))
     src.extend(glob.glob(os.path.join(ROOT_DIR, "../../*.def")))
@@ -81,7 +79,7 @@ def copy_sources():
 
     for filename in src:
         outpath = os.path.join(SRC_DIR, os.path.basename(filename))
-        log.info("%s -> %s" % (filename, outpath))
+        log.info(f"{filename} -> {outpath}")
         shutil.copy(filename, outpath)
 
 def build_libraries():
@@ -166,7 +164,7 @@ if 'bdist_wheel' in sys.argv and '--plat-name' not in sys.argv:
         # linux builds should be built in the centos 5 vm for maximum compatibility
         # see https://github.com/pypa/manylinux
         # see also https://github.com/angr/angr-dev/blob/master/bdist.sh
-        sys.argv.insert(idx + 1, 'manylinux1_' + platform.machine())
+        sys.argv.insert(idx + 1, f'manylinux1_{platform.machine()}')
     elif 'mingw' in name:
         if IS_64BITS:
             sys.argv.insert(idx + 1, 'win_amd64')

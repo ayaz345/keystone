@@ -14,9 +14,9 @@ try:
     # Initialize engine in X86-32bit mode
     ks = Ks(KS_ARCH_X86, KS_MODE_32)
     encoding, count = ks.asm(CODE)
-    print("%s = %s" %(CODE, encoding))
+    print(f"{CODE} = {encoding}")
 except KsError as e:
-    print("ERROR: %s" %e)
+    print(f"ERROR: {e}")
     # get count via e.get_asm_count()
     count = e.get_asm_count()
     if count is not None:

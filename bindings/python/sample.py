@@ -14,7 +14,7 @@ def test_ks(arch, mode, code, syntax=0):
 
     encoding, count = ks.asm(code)
 
-    print("%s = [ " % code, end='')
+    print(f"{code} = [ ", end='')
     for i in encoding:
         print("%02x " % i, end='')
     print("]")
@@ -41,7 +41,7 @@ def test_sym_resolver():
     CODE = b"jmp _l1; nop; _l1:"
     encoding, count = ks.asm(CODE, 0x1000)
 
-    print("%s = [ " % CODE, end='')
+    print(f"{CODE} = [ ", end='')
     for i in encoding:
         print("%02x " % i, end='')
     print("]")

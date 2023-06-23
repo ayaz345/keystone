@@ -17,17 +17,16 @@ if __name__ == '__main__':
     directory = dirname(__file__)
     if directory == '':
         directory = '.'
-    modules = glob.glob(directory+"/*.py")
+    modules = glob.glob(f"{directory}/*.py")
     __all__ = [ basename(f)[:-3] for f in modules if isfile(f)]
     suite = unittest.TestSuite()
 
     count = 1
     for module in __all__:
-        if module != "regress":
-            print("#%u - Adding %s" %(count, module))
-            count += 1
-        else:
+        if module == "regress":
             continue
+        print("#%u - Adding %s" %(count, module))
+        count += 1
         m = __import__(module)
         for cl in dir(m):
             try:

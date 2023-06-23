@@ -149,11 +149,7 @@ class Ks(object):
             self._ksh = None
             raise KsError(status)
 
-        if arch == KS_ARCH_X86:
-            # Intel syntax is default for X86
-            self._syntax = KS_OPT_SYNTAX_INTEL
-        else:
-            self._syntax = None
+        self._syntax = KS_OPT_SYNTAX_INTEL if arch == KS_ARCH_X86 else None
 
 
     # destructor to be called automatically when object is destroyed.
@@ -214,16 +210,13 @@ class Ks(object):
         else:
             if stat_count.value == 0:
                 return (None, 0)
-            else:
-                if as_bytes:
-                    encoding = string_at(encode, encode_size.value)
-                else:
-                    encoding = []
-                    for i in range(encode_size.value):
-                        encoding.append(encode[i])
-
-                _ks.ks_free(encode)
-                return (encoding, stat_count.value)
+            encoding = (
+                string_at(encode, encode_size.value)
+                if as_bytes
+                else [encode[i] for i in range(encode_size.value)]
+            )
+            _ks.ks_free(encode)
+            return (encoding, stat_count.value)
 
 
 # print out debugging info
@@ -233,12 +226,10 @@ def debug():
         "systemz": KS_ARCH_SYSTEMZ, "ppc": KS_ARCH_PPC, \
         "hexagon": KS_ARCH_HEXAGON, "x86": KS_ARCH_X86, 'evm': KS_ARCH_EVM }
 
-    all_archs = ""
     keys = archs.keys()
-    for k in sorted(keys):
-        if ks_arch_supported(archs[k]):
-            all_archs += "-%s" % k
-
+    all_archs = "".join(
+        f"-{k}" for k in sorted(keys) if ks_arch_supported(archs[k])
+    )
     (major, minor, _combined) = ks_version()
 
     return "python-%s-c%u.%u-b%u.%u" % (all_archs, major, minor, KS_API_MAJOR, KS_API_MINOR)

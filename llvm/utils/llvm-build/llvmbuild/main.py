@@ -75,13 +75,10 @@ class LLVMProjectInfo(object):
             # Parse the components from it.
             common,info_iter = componentinfo.load_from_path(llvmbuild_path,
                                                             subpath)
-            for info in info_iter:
-                yield info
-
+            yield from info_iter
             # Recurse into the specified subdirectories.
             for subdir in common.get_list("subdirectories"):
-                for item in recurse(os.path.join(subpath, subdir)):
-                    yield item
+                yield from recurse(os.path.join(subpath, subdir))
 
         return recurse("/")
 
@@ -232,9 +229,7 @@ class LLVMProjectInfo(object):
             # Format the components into llvmbuild fragments.
             fragments = []
 
-            # Add the common fragments.
-            subdirectories = subpath_subdirs.get(subpath)
-            if subdirectories:
+            if subdirectories := subpath_subdirs.get(subpath):
                 fragment = """\
 subdirectories = %s
 """ % (" ".join(sorted(subdirectories)),)
@@ -260,31 +255,25 @@ subdirectories = %s
             if not os.path.exists(directory_path):
                 os.makedirs(directory_path)
 
-            # In an effort to preserve comments (which aren't parsed), read in
-            # the original file and extract the comments. We only know how to
-            # associate comments that prefix a section name.
-            f = open(infos[0]._source_path)
-            comments_map = {}
-            comment_block = ""
-            for ln in f:
-                if ln.startswith(';'):
-                    comment_block += ln
-                elif ln.startswith('[') and ln.endswith(']\n'):
-                    comments_map[ln[1:-2]] = comment_block
-                else:
-                    comment_block = ""
-            f.close()
-
+            with open(infos[0]._source_path) as f:
+                comments_map = {}
+                comment_block = ""
+                for ln in f:
+                    if ln.startswith(';'):
+                        comment_block += ln
+                    elif ln.startswith('[') and ln.endswith(']\n'):
+                        comments_map[ln[1:-2]] = comment_block
+                    else:
+                        comment_block = ""
             # Create the LLVMBuild fil[e.
             file_path = os.path.join(directory_path, 'LLVMBuild.txt')
-            f = open(file_path, "w")
-
-            # Write the header.
-            header_fmt = ';===- %s %s-*- Conf -*--===;'
-            header_name = '.' + os.path.join(subpath, 'LLVMBuild.txt')
-            header_pad = '-' * (80 - len(header_fmt % (header_name, '')))
-            header_string = header_fmt % (header_name, header_pad)
-            f.write("""\
+            with open(file_path, "w") as f:
+                # Write the header.
+                header_fmt = ';===- %s %s-*- Conf -*--===;'
+                header_name = '.' + os.path.join(subpath, 'LLVMBuild.txt')
+                header_pad = '-' * (80 - len(header_fmt % (header_name, '')))
+                header_string = header_fmt % (header_name, header_pad)
+                f.write("""\
 %s
 ;
 ;                     The LLVM Compiler Infrastructure
@@ -304,17 +293,15 @@ subdirectories = %s
 
 """ % header_string)
 
-            # Write out each fragment.each component fragment.
-            for name,fragment in fragments:
-                comment = comments_map.get(name)
-                if comment is not None:
-                    f.write(comment)
-                f.write("[%s]\n" % name)
-                f.write(fragment)
-                if fragment is not fragments[-1][1]:
-                    f.write('\n')
-
-            f.close()
+                # Write out each fragment.each component fragment.
+                for name,fragment in fragments:
+                    comment = comments_map.get(name)
+                    if comment is not None:
+                        f.write(comment)
+                    f.write("[%s]\n" % name)
+                    f.write(fragment)
+                    if fragment is not fragments[-1][1]:
+                        f.write('\n')
 
     def write_library_table(self, output_path, enabled_optional_components):
         # Write out the mapping from component names to required libraries.
@@ -325,7 +312,7 @@ subdirectories = %s
         for c in self.ordered_component_infos:
             # Skip optional components which are not enabled.
             if c.type_name == 'OptionalLibrary' \
-                and c.name not in enabled_optional_components:
+                    and c.name not in enabled_optional_components:
                 continue
 
             # Skip target groups which are not enabled.
@@ -335,7 +322,7 @@ subdirectories = %s
 
             # Only certain components are in the table.
             if c.type_name not in ('Library', 'OptionalLibrary', \
-                                   'LibraryGroup', 'TargetGroup'):
+                                       'LibraryGroup', 'TargetGroup'):
                 continue
 
             # Compute the llvm-config "component name". For historical reasons,
@@ -343,7 +330,7 @@ subdirectories = %s
             llvmconfig_component_name = c.get_llvmconfig_component_name()
 
             # Get the library name, or None for LibraryGroups.
-            if c.type_name == 'Library' or c.type_name == 'OptionalLibrary':
+            if c.type_name in ['Library', 'OptionalLibrary']:
                 library_name = c.get_prefixed_library_name()
                 is_installed = c.installed
             else:
@@ -369,7 +356,7 @@ subdirectories = %s
 
         # Create an 'all' pseudo component. We keep the dependency list small by
         # only listing entries that have no other dependents.
-        root_entries = set(e[0] for e in entries)
+        root_entries = {e[0] for e in entries}
         for _,_,deps,_ in entries:
             root_entries -= set(deps)
         entries.append(('all', None, root_entries, True))
@@ -383,8 +370,8 @@ subdirectories = %s
 
         # Write out the library table.
         make_install_dir(os.path.dirname(output_path))
-        f = open(output_path+'.new', 'w')
-        f.write("""\
+        with open(f'{output_path}.new', 'w') as f:
+            f.write("""\
 //===- llvm-build generated file --------------------------------*- C++ -*-===//
 //
 // Component Library Depenedency Table
@@ -394,44 +381,46 @@ subdirectories = %s
 //===----------------------------------------------------------------------===//
 
 """)
-        f.write('struct AvailableComponent {\n')
-        f.write('  /// The name of the component.\n')
-        f.write('  const char *Name;\n')
-        f.write('\n')
-        f.write('  /// The name of the library for this component (or NULL).\n')
-        f.write('  const char *Library;\n')
-        f.write('\n')
-        f.write('  /// Whether the component is installed.\n')
-        f.write('  bool IsInstalled;\n')
-        f.write('\n')
-        f.write('\
+            f.write('struct AvailableComponent {\n')
+            f.write('  /// The name of the component.\n')
+            f.write('  const char *Name;\n')
+            f.write('\n')
+            f.write('  /// The name of the library for this component (or NULL).\n')
+            f.write('  const char *Library;\n')
+            f.write('\n')
+            f.write('  /// Whether the component is installed.\n')
+            f.write('  bool IsInstalled;\n')
+            f.write('\n')
+            f.write('\
   /// The list of libraries required when linking this component.\n')
-        f.write('  const char *RequiredLibraries[%d];\n' % (
-            max_required_libraries))
-        f.write('} AvailableComponents[%d] = {\n' % len(entries))
-        for name,library_name,required_names,is_installed in entries:
-            if library_name is None:
-                library_name_as_cstr = 'nullptr'
-            else:
-                library_name_as_cstr = '"lib%s.a"' % library_name
-            if is_installed:
-                is_installed_as_cstr = 'true'
-            else:
-                is_installed_as_cstr = 'false'
-            f.write('  { "%s", %s, %s, { %s } },\n' % (
-                name, library_name_as_cstr, is_installed_as_cstr,
-                ', '.join('"%s"' % dep
-                          for dep in required_names)))
-        f.write('};\n')
-        f.close()
-
+            f.write('  const char *RequiredLibraries[%d];\n' % (
+                max_required_libraries))
+            f.write('} AvailableComponents[%d] = {\n' % len(entries))
+            for name,library_name,required_names,is_installed in entries:
+                if library_name is None:
+                    library_name_as_cstr = 'nullptr'
+                else:
+                    library_name_as_cstr = f'"lib{library_name}.a"'
+                is_installed_as_cstr = 'true' if is_installed else 'false'
+                f.write(
+                    (
+                        '  { "%s", %s, %s, { %s } },\n'
+                        % (
+                            name,
+                            library_name_as_cstr,
+                            is_installed_as_cstr,
+                            ', '.join(f'"{dep}"' for dep in required_names),
+                        )
+                    )
+                )
+            f.write('};\n')
         if not os.path.isfile(output_path):
-            os.rename(output_path+'.new', output_path)
-        elif filecmp.cmp(output_path, output_path+'.new'):
-            os.remove(output_path+'.new')
+            os.rename(f'{output_path}.new', output_path)
+        elif filecmp.cmp(output_path, f'{output_path}.new'):
+            os.remove(f'{output_path}.new')
         else:
             os.remove(output_path)
-            os.rename(output_path+'.new', output_path)
+            os.rename(f'{output_path}.new', output_path)
 
     def get_required_libraries_for_component(self, ci, traverse_groups = False):
         """
@@ -450,7 +439,7 @@ subdirectories = %s
             dep = self.component_info_map[name]
 
             # If it is a library, yield it.
-            if dep.type_name == 'Library' or dep.type_name == 'OptionalLibrary':
+            if dep.type_name in ['Library', 'OptionalLibrary']:
                 yield dep
                 continue
 
@@ -461,8 +450,7 @@ subdirectories = %s
                     yield dep
                     continue
 
-                for res in self.get_required_libraries_for_component(dep, True):
-                    yield res
+                yield from self.get_required_libraries_for_component(dep, True)
 
     def get_fragment_dependencies(self):
         """
@@ -546,15 +534,14 @@ subdirectories = %s
 
         # Write out the CMake fragment.
         make_install_dir(os.path.dirname(output_path))
-        f = open(output_path, 'w')
-
-        # Write the header.
-        header_fmt = '\
+        with open(output_path, 'w') as f:
+            # Write the header.
+            header_fmt = '\
 #===-- %s - LLVMBuild Configuration for LLVM %s-*- CMake -*--===#'
-        header_name = os.path.basename(output_path)
-        header_pad = '-' * (80 - len(header_fmt % (header_name, '')))
-        header_string = header_fmt % (header_name, header_pad)
-        f.write("""\
+            header_name = os.path.basename(output_path)
+            header_pad = '-' * (80 - len(header_fmt % (header_name, '')))
+            header_string = header_fmt % (header_name, header_pad)
+            f.write("""\
 %s
 #
 #                     The LLVM Compiler Infrastructure
@@ -573,8 +560,8 @@ subdirectories = %s
 
 """ % header_string)
 
-        # Write the dependency information in the best way we can.
-        f.write("""
+            # Write the dependency information in the best way we can.
+            f.write("""
 # LLVMBuild CMake fragment dependencies.
 #
 # CMake has no builtin way to declare that the configuration depends on
@@ -586,34 +573,32 @@ subdirectories = %s
 # FIXME: File a CMake RFE to get a properly supported version of this
 # feature.
 """)
-        for dep in dependencies:
-            f.write("""\
+            for dep in dependencies:
+                f.write("""\
 configure_file(\"%s\"
                ${CMAKE_CURRENT_BINARY_DIR}/DummyConfigureOutput)\n""" % (
-                cmake_quote_path(dep),))
+                    cmake_quote_path(dep),))
 
-        # Write the properties we use to encode the required library dependency
-        # information in a form CMake can easily use directly.
-        f.write("""
+            # Write the properties we use to encode the required library dependency
+            # information in a form CMake can easily use directly.
+            f.write("""
 # Explicit library dependency information.
 #
 # The following property assignments effectively create a map from component
 # names to required libraries, in a way that is easily accessed from CMake.
 """)
-        self.foreach_cmake_library(
-            lambda ci:
-              f.write("""\
+            self.foreach_cmake_library(
+                lambda ci:
+                  f.write("""\
 set_property(GLOBAL PROPERTY LLVMBUILD_LIB_DEPS_%s %s)\n""" % (
-                ci.get_prefixed_library_name(), " ".join(sorted(
-                     dep.get_prefixed_library_name()
-                     for dep in self.get_required_libraries_for_component(ci)))))
-            ,
-            enabled_optional_components,
-            skip_disabled = False,
-            skip_not_installed = False # Dependency info must be emitted for internals libs too
-            )
-
-        f.close()
+                    ci.get_prefixed_library_name(), " ".join(sorted(
+                         dep.get_prefixed_library_name()
+                         for dep in self.get_required_libraries_for_component(ci)))))
+                ,
+                enabled_optional_components,
+                skip_disabled = False,
+                skip_not_installed = False # Dependency info must be emitted for internals libs too
+                )
 
     def write_cmake_exports_fragment(self, output_path, enabled_optional_components):
         """
@@ -628,28 +613,25 @@ set_property(GLOBAL PROPERTY LLVMBUILD_LIB_DEPS_%s %s)\n""" % (
 
         # Write out the CMake exports fragment.
         make_install_dir(os.path.dirname(output_path))
-        f = open(output_path, 'w')
-
-        f.write("""\
+        with open(output_path, 'w') as f:
+            f.write("""\
 # Explicit library dependency information.
 #
 # The following property assignments tell CMake about link
 # dependencies of libraries imported from LLVM.
 """)
-        self.foreach_cmake_library(
-            lambda ci:
-              f.write("""\
+            self.foreach_cmake_library(
+                lambda ci:
+                  f.write("""\
 set_property(TARGET %s PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES %s)\n""" % (
-                ci.get_prefixed_library_name(), " ".join(sorted(
-                     dep.get_prefixed_library_name()
-                     for dep in self.get_required_libraries_for_component(ci)))))
-            ,
-            enabled_optional_components,
-            skip_disabled = True,
-            skip_not_installed = True # Do not export internal libraries like gtest
-            )
-
-        f.close()
+                    ci.get_prefixed_library_name(), " ".join(sorted(
+                         dep.get_prefixed_library_name()
+                         for dep in self.get_required_libraries_for_component(ci)))))
+                ,
+                enabled_optional_components,
+                skip_disabled = True,
+                skip_not_installed = True # Do not export internal libraries like gtest
+                )
 
     def write_make_fragment(self, output_path, enabled_optional_components):
         """
@@ -665,15 +647,14 @@ set_property(TARGET %s PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES %s)\n""" % (
 
         # Write out the Makefile fragment.
         make_install_dir(os.path.dirname(output_path))
-        f = open(output_path, 'w')
-
-        # Write the header.
-        header_fmt = '\
+        with open(output_path, 'w') as f:
+            # Write the header.
+            header_fmt = '\
 #===-- %s - LLVMBuild Configuration for LLVM %s-*- Makefile -*--===#'
-        header_name = os.path.basename(output_path)
-        header_pad = '-' * (80 - len(header_fmt % (header_name, '')))
-        header_string = header_fmt % (header_name, header_pad)
-        f.write("""\
+            header_name = os.path.basename(output_path)
+            header_pad = '-' * (80 - len(header_fmt % (header_name, '')))
+            header_string = header_fmt % (header_name, header_pad)
+            f.write("""\
 %s
 #
 #                     The LLVM Compiler Infrastructure
@@ -692,45 +673,44 @@ set_property(TARGET %s PROPERTY IMPORTED_LINK_INTERFACE_LIBRARIES %s)\n""" % (
 
 """ % header_string)
 
-        # Write the dependencies for the fragment.
-        #
-        # FIXME: Technically, we need to properly quote for Make here.
-        f.write("""\
+            # Write the dependencies for the fragment.
+            #
+            # FIXME: Technically, we need to properly quote for Make here.
+            f.write("""\
 # Clients must explicitly enable LLVMBUILD_INCLUDE_DEPENDENCIES to get
 # these dependencies. This is a compromise to help improve the
 # performance of recursive Make systems.
 """)
-        f.write('ifeq ($(LLVMBUILD_INCLUDE_DEPENDENCIES),1)\n')
-        f.write("# The dependencies for this Makefile fragment itself.\n")
-        f.write("%s: \\\n" % (mk_quote_string_for_target(output_path),))
-        for dep in dependencies:
-            f.write("\t%s \\\n" % (dep,))
-        f.write('\n')
+            f.write('ifeq ($(LLVMBUILD_INCLUDE_DEPENDENCIES),1)\n')
+            f.write("# The dependencies for this Makefile fragment itself.\n")
+            f.write("%s: \\\n" % (mk_quote_string_for_target(output_path),))
+            for dep in dependencies:
+                f.write("\t%s \\\n" % (dep,))
+            f.write('\n')
 
-        # Generate dummy rules for each of the dependencies, so that things
-        # continue to work correctly if any of those files are moved or removed.
-        f.write("""\
+            # Generate dummy rules for each of the dependencies, so that things
+            # continue to work correctly if any of those files are moved or removed.
+            f.write("""\
 # The dummy targets to allow proper regeneration even when files are moved or
 # removed.
 """)
-        for dep in dependencies:
-            f.write("%s:\n" % (mk_quote_string_for_target(dep),))
-        f.write('endif\n')
+            for dep in dependencies:
+                f.write("%s:\n" % (mk_quote_string_for_target(dep),))
+            f.write('endif\n')
 
-        f.write("""
+            f.write("""
 # List of libraries to be exported for use by applications.
 # See 'cmake/modules/Makefile'.
 LLVM_LIBS_TO_EXPORT :=""")
-        self.foreach_cmake_library(
-            lambda ci:
-                f.write(' \\\n  %s' % ci.get_prefixed_library_name())
-            ,
-            enabled_optional_components,
-            skip_disabled = True,
-            skip_not_installed = True # Do not export internal libraries like gtest
-            )
-        f.write('\n')
-        f.close()
+            self.foreach_cmake_library(
+                lambda ci:
+                    f.write(' \\\n  %s' % ci.get_prefixed_library_name())
+                ,
+                enabled_optional_components,
+                skip_disabled = True,
+                skip_not_installed = True # Do not export internal libraries like gtest
+                )
+            f.write('\n')
 
 def add_magic_target_components(parser, project, opts):
     """add_magic_target_components(project, opts) -> None
@@ -743,9 +723,11 @@ def add_magic_target_components(parser, project, opts):
     """
 
     # Determine the available targets.
-    available_targets = dict((ci.name,ci)
-                             for ci in project.component_infos
-                             if ci.type_name == 'TargetGroup')
+    available_targets = {
+        ci.name: ci
+        for ci in project.component_infos
+        if ci.type_name == 'TargetGroup'
+    }
 
     # Find the configured native target.
 
@@ -813,7 +795,7 @@ def add_magic_target_components(parser, project, opts):
         info._is_special_group = True
         return info
 
-    info_map = dict((ci.name, ci) for ci in project.component_infos)
+    info_map = {ci.name: ci for ci in project.component_infos}
     all_targets = find_special_group('all-targets')
     native_group = find_special_group('Native')
     engine_group = find_special_group('Engine')
@@ -968,25 +950,41 @@ given by --build-root) at the same SUBPATH""",
         available_targets = [ci for ci in project_info.component_infos
                              if ci.type_name == 'TargetGroup']
         substitutions = [
-            ("@LLVM_ENUM_TARGETS@",
-             ' '.join('LLVM_TARGET(%s)' % ci.name
-                      for ci in available_targets)),
-            ("@LLVM_ENUM_ASM_PRINTERS@",
-             ' '.join('LLVM_ASM_PRINTER(%s)' % ci.name
-                      for ci in available_targets
-                      if ci.has_asmprinter)),
-            ("@LLVM_ENUM_ASM_PARSERS@",
-             ' '.join('LLVM_ASM_PARSER(%s)' % ci.name
-                      for ci in available_targets
-                      if ci.has_asmparser)),
-            ("@LLVM_ENUM_DISASSEMBLERS@",
-             ' '.join('LLVM_DISASSEMBLER(%s)' % ci.name
-                      for ci in available_targets
-                      if ci.has_disassembler))]
+            (
+                "@LLVM_ENUM_TARGETS@",
+                ' '.join(
+                    f'LLVM_TARGET({ci.name})' for ci in available_targets
+                ),
+            ),
+            (
+                "@LLVM_ENUM_ASM_PRINTERS@",
+                ' '.join(
+                    f'LLVM_ASM_PRINTER({ci.name})'
+                    for ci in available_targets
+                    if ci.has_asmprinter
+                ),
+            ),
+            (
+                "@LLVM_ENUM_ASM_PARSERS@",
+                ' '.join(
+                    f'LLVM_ASM_PARSER({ci.name})'
+                    for ci in available_targets
+                    if ci.has_asmparser
+                ),
+            ),
+            (
+                "@LLVM_ENUM_DISASSEMBLERS@",
+                ' '.join(
+                    f'LLVM_DISASSEMBLER({ci.name})'
+                    for ci in available_targets
+                    if ci.has_disassembler
+                ),
+            ),
+        ]
 
         # Configure the given files.
         for subpath in opts.configure_target_def_files:
-            inpath = os.path.join(source_root, subpath + '.in')
+            inpath = os.path.join(source_root, f'{subpath}.in')
             outpath = os.path.join(opts.build_root, subpath)
             result = configutil.configure_file(inpath, outpath, substitutions)
             if not result:

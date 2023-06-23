@@ -44,12 +44,11 @@ def configure_file(input_path, output_path, substitutions):
     if os.path.exists(output_path):
         current_data = None
         try:
-            f = open(output_path, "rb")
-            try:
-                current_data = f.read()
-            except:
-                current_data = None
-            f.close()
+            with open(output_path, "rb") as f:
+                try:
+                    current_data = f.read()
+                except:
+                    current_data = None
         except:
             current_data = None
 

@@ -351,7 +351,7 @@ def gen(lang):
                 # if f[0].startswith("KS_" + prefix.upper()):
                 if f[0].startswith("KS_"):
                     if len(f) > 1 and f[1] not in ('//', '='):
-                        print("WARNING: Unable to convert %s" % f)
+                        print(f"WARNING: Unable to convert {f}")
                         print("  Line =", line)
                         continue
                     elif len(f) > 1 and f[1] == '=':
@@ -360,18 +360,15 @@ def gen(lang):
                         rhs = str(count)
 
                     lhs = f[0].strip()
-                    # evaluate bitshifts in constants e.g. "KS_X86 = 1 << 1"
-                    match = re.match(r'(?P<rhs>\s*\d+\s*<<\s*\d+\s*)', rhs)
-                    if match:
-                        rhs = str(eval(match.group(1)))
-                    else:
-                        # evaluate references to other constants e.g. "KS_ARM_REG_X = KS_ARM_REG_SP"
-                        match = re.match(r'^([^\d]\w+)$', rhs)
-                        if match:
-                            try:
-                                rhs = previous[match.group(1)]
-                            except:
-                                rhs = match.group(1)
+                    if match := re.match(
+                        r'(?P<rhs>\s*\d+\s*<<\s*\d+\s*)', rhs
+                    ):
+                        rhs = str(eval(match[1]))
+                    elif match := re.match(r'^([^\d]\w+)$', rhs):
+                        try:
+                            rhs = previous[match[1]]
+                        except:
+                            rhs = match[1]
 
                     if not rhs.isdigit():
                         for k, v in previous.items():
@@ -391,42 +388,39 @@ def gen(lang):
 
     rules = templ['rules']
 
-    for prefix in consts.keys():
-        outfile = open(templ['out_file'] % prefix, 'wb')   # open as binary prevents windows newlines
-        outfile.write (str.encode(templ['header'] % prefix))
+    for prefix in consts:
+        with open(templ['out_file'] % prefix, 'wb') as outfile:
+            outfile.write (str.encode(templ['header'] % prefix))
 
-        for rule in rules:
-            regex = rule['regex']
+            for rule in rules:
+                regex = rule['regex']
 
-            consts2 = []
-            for const in consts.get(prefix):
-                if not (re.match(regex, const[0])):
+                consts2 = [
+                    const
+                    for const in consts.get(prefix)
+                    if (re.match(regex, const[0]))
+                ]
+                if not consts2:
                     continue
 
-                consts2.append(const)
+                if rule.get('pre'):
+                    outfile.write(str.encode(rule.get('pre').format(CamelCase(prefix))))
 
-            if len(consts2) == 0:
-                continue
+                for const in consts2:
+                    lhs_strip = const[0]
+                    rhs = const[1]
+                    outfile.write(rule['line_format'].format(rule['fn'](lhs_strip), rhs, lhs_strip).encode("utf-8"))
 
-            if rule.get('pre'):
-                outfile.write(str.encode(rule.get('pre').format(CamelCase(prefix))))
+                if rule.get('post'):
+                    outfile.write(str.encode (rule.get('post')))
+                    outfile.write(str.encode ('\n'))
 
-            for const in consts2:
-                lhs_strip = const[0]
-                rhs = const[1]
-                outfile.write(rule['line_format'].format(rule['fn'](lhs_strip), rhs, lhs_strip).encode("utf-8"))
-
-            if rule.get('post'):
-                outfile.write(str.encode (rule.get('post')))
-                outfile.write(str.encode ('\n'))
-
-        outfile.write(str.encode(templ['footer']))
-        outfile.close()
+            outfile.write(str.encode(templ['footer']))
 
 def main():
     lang = sys.argv[1]
-    if not lang in template:
-        raise RuntimeError("Unsupported binding %s" % lang)
+    if lang not in template:
+        raise RuntimeError(f"Unsupported binding {lang}")
     gen(sys.argv[1])
 
 if __name__ == "__main__":

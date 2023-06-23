@@ -23,8 +23,7 @@ class ComponentInfo(object):
 
     @staticmethod
     def parse_items(items, has_dependencies = True):
-        kwargs = {}
-        kwargs['name'] = items.get_string('name')
+        kwargs = {'name': items.get_string('name')}
         kwargs['parent'] = items.get_optional_string('parent')
         if has_dependencies:
             kwargs['dependencies'] = items.get_list('dependencies')
@@ -147,8 +146,7 @@ class LibraryComponentInfo(ComponentInfo):
         self.installed = installed
 
     def get_component_references(self):
-        for r in ComponentInfo.get_component_references(self):
-            yield r
+        yield from ComponentInfo.get_component_references(self)
         for r in self.required_libraries:
             yield ('required library', r)
         for r in self.add_to_library_groups:
@@ -187,10 +185,7 @@ parent = %s
 
         # FIXME: We need to get the prefix information from an explicit project
         # object, or something.
-        if basename in ('gtest', 'gtest_main'):
-            return basename
-
-        return 'LLVM%s' % basename
+        return basename if basename in ('gtest', 'gtest_main') else f'LLVM{basename}'
 
     def get_llvmconfig_component_name(self):
         return self.get_library_name().lower()
@@ -233,8 +228,7 @@ class LibraryGroupComponentInfo(ComponentInfo):
         self.add_to_library_groups = list(add_to_library_groups)
 
     def get_component_references(self):
-        for r in ComponentInfo.get_component_references(self):
-            yield r
+        yield from ComponentInfo.get_component_references(self)
         for r in self.required_libraries:
             yield ('required library', r)
         for r in self.add_to_library_groups:
@@ -306,8 +300,7 @@ class TargetGroupComponentInfo(ComponentInfo):
         self.enabled = False
 
     def get_component_references(self):
-        for r in ComponentInfo.get_component_references(self):
-            yield r
+        yield from ComponentInfo.get_component_references(self)
         for r in self.required_libraries:
             yield ('required library', r)
         for r in self.add_to_library_groups:
@@ -352,8 +345,7 @@ class ToolComponentInfo(ComponentInfo):
         self.required_libraries = list(required_libraries)
 
     def get_component_references(self):
-        for r in ComponentInfo.get_component_references(self):
-            yield r
+        yield from ComponentInfo.get_component_references(self)
         for r in self.required_libraries:
             yield ('required library', r)
 
@@ -381,11 +373,7 @@ class IniFormatParser(dict):
     def get_list(self, key):
         # Check if the value is defined.
         value = self.get(key)
-        if value is None:
-            return []
-
-        # Lists are just whitespace separated strings.
-        return value.split()
+        return [] if value is None else value.split()
 
     def get_optional_string(self, key):
         value = self.get_list(key)
@@ -396,10 +384,10 @@ class IniFormatParser(dict):
         return value[0]
 
     def get_string(self, key):
-        value = self.get_optional_string(key)
-        if not value:
+        if value := self.get_optional_string(key):
+            return value
+        else:
             raise ParseError("missing value for required string: %r" % key)
-        return value
 
     def get_optional_bool(self, key, default = None):
         value = self.get_optional_string(key)
@@ -416,12 +404,18 @@ class IniFormatParser(dict):
             raise ParseError("missing value for required boolean: %r" % key)
         return value
 
-_component_type_map = dict(
-    (t.type_name, t)
-    for t in (GroupComponentInfo,
-              LibraryComponentInfo, LibraryGroupComponentInfo,
-              ToolComponentInfo, BuildToolComponentInfo,
-              TargetGroupComponentInfo, OptionalLibraryComponentInfo))
+_component_type_map = {
+    t.type_name: t
+    for t in (
+        GroupComponentInfo,
+        LibraryComponentInfo,
+        LibraryGroupComponentInfo,
+        ToolComponentInfo,
+        BuildToolComponentInfo,
+        TargetGroupComponentInfo,
+        OptionalLibraryComponentInfo,
+    )
+}
 def load_from_path(path, subpath):
     # Load the LLVMBuild.txt file as an .ini format file.
     parser = configparser.RawConfigParser()
